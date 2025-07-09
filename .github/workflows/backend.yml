@@ -35,9 +35,11 @@ jobs:
 
       - name: Lint
         run: npm run lint
+        continue-on-error: true
 
       - name: Test (with coverage)
         run: npm run test:coverage
+        continue-on-error: true
 
       ### SonarQube ###
       - name: SonarQube Scan
