@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend-network
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      PORT: 3001
+      NODE_ENV: production
+    ports:
+      - "3001:3001"
+    networks:
+      - backend-network
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    ports:
+      - "3000:80"
+    networks:
+      - backend-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+
+networks:
+  backend-network:
+    driver: bridge

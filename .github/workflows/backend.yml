@@ -1,0 +1,159 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ACCESS_TOKEN_GITHUB }} # Wichtig, ohne das darf später der automatische Commit der Version nicht gemacht werden!
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test (with coverage)
+        run: npm run test:coverage
+
+      ### SonarQube ###
+      # Version hinzufügen? Dafür müsste der Block nach vorne verschobene werden, der die Versionierung hochzählt 
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_BACKEND }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          projectBaseDir: backend
+
+      ## Schritt war notwendig, um hardcoded Filepath für nächsten Schritt zu identifizieren
+      #- name: Check for SonarQube report-task.txt
+      #  run: |
+      #    echo "Arbeitsverzeichnis: $(pwd)"
+      #    echo "Suche nach report-task.txt..."
+      #    files=$(find . -name report-task.txt)
+      #    echo "Gefundene Dateien:"
+      #    echo "$files"
+      #    if [ -n "$files" ]; then
+      #      echo "Inhalt der ersten report-task.txt:"
+      #      cat $(echo "$files" | head -n1)
+      #    else
+      #      echo "Keine report-task.txt gefunden."
+      #    fi
+
+      - name: SonarQube Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+        with:
+          scanMetadataReportFile: backend/.scannerwork/report-task.txt # hardcoded file-path
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_BACKEND }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+
+      ### Docker Initalisierung + Login ###
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      ### Versionierungslogik ###
+      - name: Extract version
+        id: increment_version
+        run: |
+          VERSION_FILE="version.txt"
+
+          # Lade existierende Version oder setze 0.0.0
+          if [ -f "$VERSION_FILE" ]; then
+            version=$(cat "$VERSION_FILE")
+          else
+            version="0.0.0"
+          fi
+
+          major=$(echo $version | cut -d. -f1)
+          minor=$(echo $version | cut -d. -f2)
+          patch=$(echo $version | cut -d. -f3)
+
+          # Falls Commit-Message "release" enthält → minor +1, patch=0
+          if [[ "${{ github.event.head_commit.message }}" == *"release"* ]]; then
+            minor=$((minor + 1))
+            patch=0
+          else
+            patch=$((patch + 1))
+          fi
+
+          new_version="$major.$minor.$patch"
+          echo $new_version > "$VERSION_FILE"f
+          git add "$VERSION_FILE"
+
+          echo "version=$new_version" >> $GITHUB_OUTPUT
+
+      - name: Determine branch name
+        id: branch-name
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "branch=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+          else
+            echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and Push Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN_GITHUB }}
+          NEW_VERSION: ${{ steps.increment_version.outputs.version }}
+          BRANCH_NAME: ${{ steps.branch-name.outputs.branch }}
+        run: |
+            git add version.txt
+            cd ..
+            git config --global user.name 'github-actions[bot]'
+            git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+            git checkout $BRANCH_NAME
+            git pull --rebase --autostash
+            echo "$NEW_VERSION" > backend/version.txt
+            git add backend/version.txt
+            git commit -m "Update backend-version to $NEW_VERSION [skip ci]"
+            git push origin $BRANCH_NAME --push-option=ci-skip
+
+      ### Docker Build + Push ###
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/backend:${{ steps.increment_version.outputs.version }} .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/backend:${{ steps.increment_version.outputs.version }}
+
+      - name: Tag and push latest
+        run: |
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/backend:${{ steps.increment_version.outputs.version }} ${{ secrets.DOCKERHUB_USERNAME }}/backend:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/backend:latest
+
+      
+
+      

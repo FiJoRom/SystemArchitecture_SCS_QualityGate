@@ -1,0 +1,189 @@
+name: Frontend CI
+
+on:
+  push:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ACCESS_TOKEN_GITHUB }} # Wichtig, ohne das darf später der automatische Commit der Version nicht gemacht werden!
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test (with coverage)
+        run: npm run test:coverage
+
+      ### SonarQube ###
+      #Version hinzufügen? Dafür müsste der Block nach vorne verschobene werden, der die Versionierung hochzählt 
+      #Lieber nicht, Versionierung sollte ja wirklich erst nach Check erfolgen, dass es Qualität usw. erfüllt -> nach SonarQube
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_FRONTEND }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          projectBaseDir: frontend
+      
+      - name: SonarQube Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+        with:
+          scanMetadataReportFile: frontend/.scannerwork/report-task.txt  ## wichtig, siehe Backend
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_FRONTEND }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      ### Docker Initalisierung + Login ###
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      ### Versionierungslogik ###
+      ### test
+      - name: Extract version
+        id: increment_version
+        run: |
+          VERSION_FILE="version.txt"
+
+          # Lade existierende Version oder setze 0.0.0
+          if [ -f "$VERSION_FILE" ]; then
+            version=$(cat "$VERSION_FILE")
+          else
+            version="0.0.0"
+          fi
+
+          major=$(echo $version | cut -d. -f1)
+          minor=$(echo $version | cut -d. -f2)
+          patch=$(echo $version | cut -d. -f3)
+
+          # Falls Commit-Message "release" enthält → minor +1, patch=0
+          #if [[ "${{ github.event.head_commit.message }}" == *"release"* ]]; then
+          #  minor=$((minor + 1))
+          #  patch=0
+          #else
+          #  patch=$((patch + 1))
+          #fi
+
+          if [[ "${{ github.event.head_commit.message }}" == *"release"* ]]; then
+            minor=$((minor + 1))
+            patch=0
+            echo "do_release=true" >> $GITHUB_OUTPUT
+          else
+            patch=$((patch + 1))
+            echo "do_release=false" >> $GITHUB_OUTPUT
+          fi
+
+          new_version="$major.$minor.$patch"
+          echo $new_version > "$VERSION_FILE"
+          git add "$VERSION_FILE"
+
+          echo "version=$new_version" >> $GITHUB_OUTPUT
+
+      - name: Determine branch name
+        id: branch-name
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "branch=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+          else
+            echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and Push Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN_GITHUB }}
+          NEW_VERSION: ${{ steps.increment_version.outputs.version }}
+          BRANCH_NAME: ${{ steps.branch-name.outputs.branch }}
+        run: |
+            git add version.txt
+            cd ..
+            git config --global user.name 'github-actions[bot]'
+            git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+            git checkout $BRANCH_NAME
+            git pull --rebase --autostash
+            echo "$NEW_VERSION" > frontend/version.txt
+            git add frontend/version.txt
+            git commit -m "Update frontend-version to $NEW_VERSION [skip ci]"
+            git push origin $BRANCH_NAME --push-option=ci-skip
+      
+      ### Docker build und push ###
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ steps.increment_version.outputs.version }} .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ steps.increment_version.outputs.version }}
+
+      - name: Tag and push latest
+        run: |
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ steps.increment_version.outputs.version }} ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
+
+            # Docker-Image als ZIP verpacken
+      
+      ## Github 
+      - name: Package Frontend Docker image
+        if: steps.increment_version.outputs.do_release == 'true'
+        run: |
+          cd ..
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ steps.increment_version.outputs.version }}"
+          docker pull "$IMAGE"
+          docker save "$IMAGE" -o frontend_${{ steps.increment_version.outputs.version }}.tar
+          zip frontend_${{ steps.increment_version.outputs.version }}.zip frontend_${{ steps.increment_version.outputs.version }}.tar
+
+      - name: Package Backend Docker image (with matching version)
+        if: steps.increment_version.outputs.do_release == 'true'
+        working-directory: .
+        run: |
+          BACKEND_VERSION=$(cat backend/version.txt)
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/backend:latest"
+          docker pull "$IMAGE"
+          docker save "$IMAGE" -o backend_${BACKEND_VERSION}.tar
+          zip backend_${BACKEND_VERSION}.zip backend_${BACKEND_VERSION}.tar
+
+      - name: Create GitHub Release
+        if: steps.increment_version.outputs.do_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: Frontend${{ steps.increment_version.outputs.version }}
+          name: Release Frontend ${{ steps.increment_version.outputs.version }}
+          body: |
+            Automatisches Release aus CI
+          files: |
+            README.md
+            frontend_${{ steps.increment_version.outputs.version }}.zip
+            backend_*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN_GITHUB }}
+
+
