@@ -15,7 +15,7 @@ export function problematicFunction(input: any) {
 
 // 2. Bug: potenzieller Null-Zugriff
 export function getUserName(user: { name?: string }) {
-  if (!user.name) return;
+  //if (!user.name) return;
   return user.name.toUpperCase(); // user.name könnte undefined sein
 }
 
@@ -35,5 +35,13 @@ export function unusedBranch(flag: boolean) {
 
 // 5. Duplikat → einfach später per Copy-Paste einbauen
 export function duplicateExample() {
+  console.log('This is duplicate code');
+}
+
+export function duplicateExample2() {
+  console.log('This is duplicate code');
+}
+
+export function duplicateExample3() {
   console.log('This is duplicate code');
 }
