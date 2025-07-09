@@ -1,4 +1,4 @@
-import { add, subtract } from './math.js';
+import { add, subtract } from './math';
 
 describe('math utils', () => {
   it('should add numbers', () => {
