@@ -1,7 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="1" failures="0" errors="0" time="0.936">
-  <testsuite name="undefined" errors="0" failures="0" skipped="0" timestamp="2025-06-08T17:32:09" time="0.898" tests="1">
-    <testcase classname=" 1 + 1 = 2" name=" 1 + 1 = 2" time="0.002">
+<testsuites name="jest tests" tests="8" failures="1" errors="0" time="0.406">
+  <testsuite name="demo-problems" errors="0" failures="1" skipped="0" timestamp="2025-07-09T16:58:33" time="0.31" tests="5">
+    <testcase classname="demo-problems problematicFunction works" name="demo-problems problematicFunction works" time="0.001">
+    </testcase>
+    <testcase classname="demo-problems getUserName handles valid input" name="demo-problems getUserName handles valid input" time="0.001">
+    </testcase>
+    <testcase classname="demo-problems execute runs code (dangerous)" name="demo-problems execute runs code (dangerous)" time="0">
+    </testcase>
+    <testcase classname="demo-problems unusedBranch returns correct string" name="demo-problems unusedBranch returns correct string" time="0">
+    </testcase>
+    <testcase classname="demo-problems duplicateExample logs something" name="demo-problems duplicateExample logs something" time="0.001">
+      <failure>ReferenceError: vi is not defined
+    at Object.&lt;anonymous&gt; (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\src\demo-problems.test.ts:28:19)
+    at Promise.then.completed (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-circus\build\utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-circus\build\utils.js:231:10)
+    at _callCircusTest (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-circus\build\run.js:316:40)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at _runTest (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-circus\build\run.js:252:3)
+    at _runTestsForDescribeBlock (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-circus\build\run.js:126:9)
+    at _runTestsForDescribeBlock (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-circus\build\run.js:121:9)
+    at run (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-circus\build\run.js:71:3)
+    at runAndTransformResultsToJestFormat (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:122:21)
+    at jestAdapter (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:79:19)
+    at runTestInternal (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-runner\build\runTest.js:367:16)
+    at runTest (C:\Users\Finn\Documents\Github\SystemArchitecture_SCS_QualityGate\backend\node_modules\jest-runner\build\runTest.js:444:34)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="math utils" errors="0" failures="0" skipped="0" timestamp="2025-07-09T16:58:34" time="0.027" tests="2">
+    <testcase classname="math utils should add numbers" name="math utils should add numbers" time="0.001">
+    </testcase>
+    <testcase classname="math utils should subtract numbers" name="math utils should subtract numbers" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="undefined" errors="0" failures="0" skipped="0" timestamp="2025-07-09T16:58:34" time="0.023" tests="1">
+    <testcase classname=" 1 + 1 = 2" name=" 1 + 1 = 2" time="0">
     </testcase>
   </testsuite>
 </testsuites>
